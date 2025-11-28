@@ -64,7 +64,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </main>
 
             {/* Mobile Bottom Nav */}
-            <div className="md:hidden fixed bottom-0 left-0 right-0 border-t bg-background z-50 flex justify-around items-center h-16 pb-safe">
+            <div className="md:hidden bg-white z-50 fixed bottom-0 left-0 right-0 border-t bg-background z-50 flex justify-around items-center h-16 pb-safe">
                 {navItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = location.pathname === item.path;
