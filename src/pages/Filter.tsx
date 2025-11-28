@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useCars } from '../hooks/useCars';
 import CarCard from '../components/CarCard';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Filter as FilterIcon, X } from 'lucide-react';
+import { Filter as FilterIcon} from 'lucide-react';
 
 const FilterPage: React.FC = () => {
     const [searchParams] = useSearchParams();

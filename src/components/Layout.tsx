@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Filter, User, PlusCircle, LogOut } from 'lucide-react';
+import { Home, Filter, User, PlusCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface LayoutProps {
