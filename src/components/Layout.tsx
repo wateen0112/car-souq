@@ -30,7 +30,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     </Link>
 
                     {/* Desktop Nav */}
-                    <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
+                    <nav className="hidden z-50 bg-white md:flex items-center gap-6 text-sm font-medium">
                         {navItems.map((item) => (
                             <Link
                                 key={item.path}
