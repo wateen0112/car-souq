@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
+
 interface PullToRefreshOptions {
     onRefresh: () => Promise<void>;
     pullDownThreshold?: number;
@@ -11,7 +12,7 @@ interface PullToRefreshReturn {
     isPulling: boolean;
     isRefreshing: boolean;
     pullDistance: number;
-    containerRef: RefObject<HTMLDivElement>; // Non-nullable in usage context
+    containerRef: RefObject<HTMLDivElement | null>; // Non-nullable in usage context
 }
 
 export const usePullToRefresh = ({
@@ -38,7 +39,8 @@ export const usePullToRefresh = ({
         let isAtTop = container.scrollTop === 0;
 
         const checkIfAtTop = () => {
-            isAtTop = container.scrollTop <= 0;
+            // Check both container scroll and window scroll to be safe
+            isAtTop = container.scrollTop <= 0 && window.scrollY <= 0;
         };
 
         const handleTouchStart = (e: TouchEvent) => {
@@ -148,12 +150,15 @@ export const usePullToRefresh = ({
 
         // Track scroll position
         container.addEventListener('scroll', checkIfAtTop);
+        // Also track window scroll as we depend on it now
+        window.addEventListener('scroll', checkIfAtTop);
 
         return () => {
             container.removeEventListener('touchstart', handleTouchStart);
             container.removeEventListener('touchmove', handleTouchMove);
             container.removeEventListener('touchend', handleTouchEnd);
             container.removeEventListener('scroll', checkIfAtTop);
+            window.removeEventListener('scroll', checkIfAtTop);
 
             container.removeEventListener('mousedown', handleMouseDown);
             container.removeEventListener('mousemove', handleMouseMove);
