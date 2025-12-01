@@ -4,6 +4,9 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  esbuild: {
+    logOverride: { 'eslint-plugin': 'silent' }
+  },
   plugins: [
     react(),
     VitePWA({
