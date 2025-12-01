@@ -7,6 +7,7 @@ import CarDetails from './pages/CarDetails';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminCarForm from './pages/AdminCarForm';
+import AdminCarouselAds from './pages/AdminCarouselAds';
 
 function App() {
   const [showDialog, setShowDialog] = useState(false);
@@ -45,6 +46,7 @@ function App() {
             <Route path="/car/:id" element={<CarDetails />} />
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
+            <Route path="/admin/carousel" element={<AdminCarouselAds />} />
             <Route path="/admin/cars/new" element={<AdminCarForm />} />
             <Route path="/admin/cars/edit/:id" element={<AdminCarForm />} />
           </Routes>

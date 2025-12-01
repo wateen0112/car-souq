@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Loader2, X, Upload, Check } from 'lucide-react';
+import { Loader2, X, Upload, Check, ArrowRight } from 'lucide-react';
 
 // Static categories
 const CATEGORIES = [
@@ -177,9 +177,17 @@ const AdminCarForm: React.FC = () => {
     if (loading && isEdit) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>;
 
     return (
-        <div className="max-w-2xl mx-auto pb-20">
-            <h1 className="text-2xl font-bold mb-6">{isEdit ? 'تعديل سيارة' : 'إضافة سيارة جديدة'}</h1>
+        <div className="max-w-2xl  mx-auto pb-20">
+            <div className='flex items-center mb-6' >
+                <Link to="/admin/dashboard">
+                    <Button variant="ghost" size="sm" className="gap-2">
+                        <ArrowRight size={16} />
 
+                    </Button>
+                </Link>
+                <h1 className="text-2xl font-bold ">{isEdit ? 'تعديل سيارة' : 'إضافة سيارة جديدة'}</h1>
+
+            </div>
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-4 bg-card p-6 rounded-xl border">
                     <h2 className="font-semibold text-lg">المعلومات الأساسية</h2>

@@ -1,22 +1,22 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Car } from '../types/index.ts';
+import type { CarouselAd } from '../types/index.ts';
 
-export function useCars() {
-    const [cars, setCars] = useState<Car[]>([]);
+export function useCarouselAds() {
+    const [ads, setAds] = useState<CarouselAd[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchCars = useCallback(async () => {
+    const fetchAds = useCallback(async () => {
         try {
             setError(null);
             const { data, error } = await supabase
-                .from('cars')
+                .from('carousel_ads')
                 .select('*')
-                .order('created_at', { ascending: false });
+                .order('order_position', { ascending: true });
 
             if (error) throw error;
-            setCars(data || []);
+            setAds(data || []);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -26,12 +26,12 @@ export function useCars() {
 
     const refetch = useCallback(async () => {
         setLoading(true);
-        await fetchCars();
-    }, [fetchCars]);
+        await fetchAds();
+    }, [fetchAds]);
 
     useEffect(() => {
-        fetchCars();
-    }, [fetchCars]);
+        fetchAds();
+    }, [fetchAds]);
 
-    return { cars, loading, error, refetch };
+    return { ads, loading, error, refetch };
 }

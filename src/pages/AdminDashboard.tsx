@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import type { Car } from '../types/index.ts';
 import { Button } from '../components/ui/Button';
-import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Image as ImageIcon, ArrowRight } from 'lucide-react';
 
 const AdminDashboard: React.FC = () => {
     const [cars, setCars] = useState<Car[]>([]);
@@ -46,17 +46,34 @@ const AdminDashboard: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-bold">لوحة التحكم</h1>
-                <Link to="/admin/cars/new">
-                    <Button className="gap-2">
-                        <Plus size={16} />
-                        إضافة سيارة
-                    </Button>
-                </Link>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="flex items-center gap-4">
+                    <Link to="/">
+                        <Button variant="ghost" size="sm" className="gap-2">
+                            <ArrowRight size={16} />
+
+                        </Button>
+                    </Link>
+                    <h1 className="text-3xl font-bold">لوحة التحكم</h1>
+                </div>
+                <div className="flex gap-2 w-full md:w-auto">
+                    <Link to="/admin/carousel" className="flex-1 md:flex-none">
+                        <Button variant="outline" className="gap-2 w-full md:w-auto">
+                            <ImageIcon size={16} />
+                            إدارة الإعلانات
+                        </Button>
+                    </Link>
+                    <Link to="/admin/cars/new" className="flex-1 md:flex-none">
+                        <Button className="gap-2 w-full md:w-auto">
+                            <Plus size={16} />
+                            إضافة سيارة
+                        </Button>
+                    </Link>
+                </div>
             </div>
 
-            <div className="border rounded-lg overflow-hidden">
+            {/* Desktop Table View */}
+            <div className="hidden md:block border rounded-lg overflow-hidden">
                 <table className="w-full text-sm text-right">
                     <thead className="bg-muted text-muted-foreground">
                         <tr>
@@ -106,6 +123,48 @@ const AdminDashboard: React.FC = () => {
                         )}
                     </tbody>
                 </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-4">
+                {cars.map(car => (
+                    <div key={car.id} className="bg-card border rounded-lg p-4 flex gap-4">
+                        <div className="w-24 h-24 rounded-lg bg-muted overflow-hidden flex-shrink-0">
+                            {car.images?.[0] && <img src={car.images[0]} alt="" className="w-full h-full object-cover" />}
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col justify-between">
+                            <div>
+                                <h3 className="font-bold truncate">{car.title}</h3>
+                                <p className="text-sm text-muted-foreground">{car.category}</p>
+                                <p className="text-sm font-medium text-primary mt-1">
+                                    {car.sell_price ? `${car.sell_price.toLocaleString()} ريال` : 'السعر غير محدد'}
+                                </p>
+                            </div>
+                            <div className="flex justify-end gap-2 mt-2">
+                                <Link to={`/admin/cars/edit/${car.id}`}>
+                                    <Button variant="outline" size="sm" className="h-8 gap-1">
+                                        <Pencil size={14} />
+                                        تعديل
+                                    </Button>
+                                </Link>
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    className="h-8 gap-1"
+                                    onClick={() => handleDelete(car.id)}
+                                >
+                                    <Trash2 size={14} />
+                                    حذف
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+                {cars.length === 0 && (
+                    <div className="text-center py-10 text-muted-foreground border rounded-lg">
+                        لا توجد سيارات مضافة بعد.
+                    </div>
+                )}
             </div>
         </div>
     );

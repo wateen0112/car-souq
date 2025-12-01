@@ -4,14 +4,16 @@ import { useCars } from '../hooks/useCars';
 import CarCard from '../components/CarCard';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Filter as FilterIcon} from 'lucide-react';
+import { Filter as FilterIcon } from 'lucide-react';
+import PullToRefreshContainer from '../components/PullToRefreshContainer';
 
 const FilterPage: React.FC = () => {
     const [searchParams] = useSearchParams();
-    const { cars, loading } = useCars();
+    const { cars, loading, refetch } = useCars();
     const [showFilters, setShowFilters] = useState(false);
 
     // Filter states
+    const [searchName, setSearchName] = useState('');
     const [category, setCategory] = useState(searchParams.get('category') || '');
     const [minPrice, setMinPrice] = useState('');
     const [maxPrice, setMaxPrice] = useState('');
@@ -21,6 +23,8 @@ const FilterPage: React.FC = () => {
 
     // Apply filters
     const filteredCars = cars.filter(car => {
+        // Search by name/title
+        if (searchName && !car.title.toLowerCase().includes(searchName.toLowerCase())) return false;
         if (category && !car.category.includes(category)) return false;
         if (year && car.year !== parseInt(year)) return false;
         if (color && !car.color.includes(color)) return false;
@@ -67,6 +71,15 @@ const FilterPage: React.FC = () => {
                 {/* Filters Sidebar */}
                 <aside className={`md:w-64 space-y-6 ${showFilters ? 'block' : 'hidden md:block'}`}>
                     <div className="bg-card p-4 rounded-lg border space-y-4">
+                        <div>
+                            <label className="text-sm font-medium mb-1.5 block">البحث بالاسم</label>
+                            <Input
+                                placeholder="ابحث عن سيارة..."
+                                value={searchName}
+                                onChange={e => setSearchName(e.target.value)}
+                            />
+                        </div>
+
                         <div>
                             <label className="text-sm font-medium mb-1.5 block">التصنيف</label>
                             <Input
@@ -133,6 +146,7 @@ const FilterPage: React.FC = () => {
                             variant="secondary"
                             className="w-full"
                             onClick={() => {
+                                setSearchName('');
                                 setCategory('');
                                 setYear('');
                                 setType('');
@@ -146,8 +160,9 @@ const FilterPage: React.FC = () => {
                     </div>
                 </aside>
 
+
                 {/* Results Grid */}
-                <div className="flex-1">
+                <PullToRefreshContainer onRefresh={refetch} className="flex-1">
                     <div className="mb-4 text-muted-foreground">
                         تم العثور على {filteredCars.length} سيارة
                     </div>
@@ -165,7 +180,7 @@ const FilterPage: React.FC = () => {
                             ))}
                         </div>
                     )}
-                </div>
+                </PullToRefreshContainer>
             </div>
         </div>
     );

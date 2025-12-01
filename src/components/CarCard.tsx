@@ -13,7 +13,7 @@ const CarCard: React.FC<CarCardProps> = ({ car }) => {
 
     const formatPrice = (price?: number) => {
         if (!price) return 'غير محدد';
-        return new Intl.NumberFormat('ar-SA', { style: 'currency', currency: 'usd' }).format(price);
+        return new Intl.NumberFormat('en', { style: 'currency', currency: 'usd' }).format(price);
     };
 
     return (
@@ -39,10 +39,10 @@ const CarCard: React.FC<CarCardProps> = ({ car }) => {
                     </div>
 
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1">
+                        {/* <div className="flex items-center gap-1">
                             <span className="w-3 h-3 rounded-full border" style={{ backgroundColor: car.color }}></span>
                             <span>{car.color}</span>
-                        </div>
+                        </div> */}
                         <div className="flex items-center gap-1">
                             <span>{car.category}</span>
                         </div>

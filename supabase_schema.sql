@@ -54,3 +54,28 @@ create policy "Public Upload"
 create policy "Public Delete"
   on storage.objects for delete
   using ( bucket_id = 'car-images' );
+
+-- Create the carousel_ads table for hero section advertisements
+create table public.carousel_ads (
+  id uuid default gen_random_uuid() primary key,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  title text not null,
+  image_url text not null,
+  link_url text,
+  order_position integer default 0,
+  is_active boolean default true
+);
+
+-- Enable Row Level Security (RLS) for carousel_ads
+alter table public.carousel_ads enable row level security;
+
+-- Create a policy that allows anyone to read active carousel ads
+create policy "Public carousel ads are viewable by everyone"
+  on public.carousel_ads for select
+  using ( true );
+
+-- Create a policy that allows all operations (same as cars table)
+create policy "Enable all access for carousel ads (Insecure - for prototype only)"
+  on public.carousel_ads for all
+  using ( true )
+  with check ( true );

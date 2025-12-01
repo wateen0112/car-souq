@@ -24,3 +24,13 @@ export type CarFilter = {
     type?: 'rent' | 'sell' | 'both';
     color?: string;
 }
+
+export interface CarouselAd {
+    id: string;
+    created_at: string;
+    title: string;
+    image_url: string;
+    link_url?: string;
+    order_position: number;
+    is_active: boolean;
+}

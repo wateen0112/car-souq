@@ -2,6 +2,8 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Filter, User, PlusCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
+import WhatsAppButton from './WhatsAppButton';
+import { WHATSAPP_CONFIG } from '../lib/whatsappConfig';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -83,6 +85,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     );
                 })}
             </div>
+
+            {/* WhatsApp Floating Button */}
+            <WhatsAppButton
+                phoneNumber={WHATSAPP_CONFIG.phoneNumber}
+                message={WHATSAPP_CONFIG.defaultMessage}
+            />
         </div>
     );
 };
