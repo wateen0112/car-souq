@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { Skeleton } from '../components/ui/Skeleton';
 import { Loader2, X, Upload, Check, ArrowRight } from 'lucide-react';
 
 // Static categories
@@ -174,7 +175,33 @@ const AdminCarForm: React.FC = () => {
         }
     };
 
-    if (loading && isEdit) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>;
+    if (loading && isEdit) {
+        return (
+            <div className="max-w-2xl mx-auto pb-20 space-y-6">
+                <div className='flex items-center mb-6'>
+                    <Skeleton className="h-9 w-24" />
+                    <Skeleton className="h-8 w-48 mr-4" />
+                </div>
+                <div className="space-y-4 bg-card p-6 rounded-xl border">
+                    <Skeleton className="h-6 w-32 mb-4" />
+                    <div className="grid md:grid-cols-2 gap-4">
+                        <div className="space-y-2"><Skeleton className="h-10 w-full" /></div>
+                        <div className="space-y-2"><Skeleton className="h-10 w-full" /></div>
+                        <div className="space-y-2"><Skeleton className="h-10 w-full" /></div>
+                        <div className="space-y-2"><Skeleton className="h-10 w-full" /></div>
+                    </div>
+                    <Skeleton className="h-24 w-full" />
+                </div>
+                <div className="space-y-4 bg-card p-6 rounded-xl border">
+                    <Skeleton className="h-6 w-32 mb-4" />
+                    <div className="grid md:grid-cols-2 gap-4">
+                        <Skeleton className="h-10 w-full" />
+                        <Skeleton className="h-10 w-full" />
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-2xl  mx-auto pb-20">
@@ -216,7 +243,7 @@ const AdminCarForm: React.FC = () => {
                                 </button>
                                 {showCategoryDropdown && (
                                     <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-card shadow-lg">
-                                        <div className="bg-white  z-50 max-h-60 overflow-auto p-1">
+                                        <div className="bg-white z-50 max-h-60 overflow-auto p-1 no-scrollbar">
                                             {CATEGORIES.map((cat) => (
                                                 <button
                                                     key={cat}
@@ -276,7 +303,7 @@ const AdminCarForm: React.FC = () => {
                         {(formData.renting_type === 'sell' || formData.renting_type === 'both') && (
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">سعر البيع</label>
-                                <Input type="number" value={formData.sell_price} onChange={e => setFormData({ ...formData, sell_price: e.target.value })} />
+                                <Input type="text" value={formData.sell_price} onChange={e => setFormData({ ...formData, sell_price: e.target.value })} />
                             </div>
                         )}
 
@@ -345,7 +372,7 @@ const AdminCarForm: React.FC = () => {
 
                         {showFeaturesDropdown && (
                             <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-card shadow-lg">
-                                <div className=" bg-white  z-50 max-h-60 overflow-auto p-1">
+                                <div className=" bg-white z-50 max-h-60 overflow-auto p-1 no-scrollbar">
                                     {AVAILABLE_FEATURES.map((feature) => (
                                         <button
                                             key={feature}

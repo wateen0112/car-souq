@@ -2,8 +2,9 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import type { Car } from '../types/index.ts';
-import { Loader2, ArrowRight, Check, Share2, MessageCircle } from 'lucide-react';
+import { ArrowRight, Check, Share2, MessageCircle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+import { Skeleton } from '../components/ui/Skeleton';
 import PullToRefreshContainer from '../components/PullToRefreshContainer';
 
 const CarDetails: React.FC = () => {
@@ -35,7 +36,41 @@ const CarDetails: React.FC = () => {
         fetchCar();
     }, [fetchCar]);
 
-    if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>;
+    if (loading) {
+        return (
+            <div className="max-w-4xl mx-auto pb-20 space-y-8 p-4">
+                <div className="flex justify-between items-center">
+                    <Skeleton className="h-10 w-24" />
+                    <div className="flex gap-2">
+                        <Skeleton className="h-10 w-10" />
+                        <Skeleton className="h-10 w-10" />
+                    </div>
+                </div>
+                <div className="grid md:grid-cols-2 gap-8">
+                    <div className="space-y-4">
+                        <Skeleton className="aspect-[4/3] w-full rounded-xl" />
+                        <div className="flex gap-2">
+                            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-20 w-20 rounded-lg" />)}
+                        </div>
+                    </div>
+                    <div className="space-y-6">
+                        <div className="space-y-2">
+                            <Skeleton className="h-10 w-3/4" />
+                            <div className="flex gap-2">
+                                <Skeleton className="h-6 w-20" />
+                                <Skeleton className="h-6 w-16" />
+                            </div>
+                        </div>
+                        <Skeleton className="h-32 w-full rounded-xl" />
+                        <div className="space-y-2">
+                            <Skeleton className="h-6 w-24" />
+                            <Skeleton className="h-24 w-full" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
     if (!car) return <div className="text-center p-10">السيارة غير موجودة</div>;
 
     const formatPrice = (price?: number) => {
@@ -99,7 +134,7 @@ const CarDetails: React.FC = () => {
                                 <div className="flex items-center justify-center h-full text-muted-foreground">لا توجد صور</div>
                             )}
                         </div>
-                        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                             {car.images?.map((img, idx) => (
                                 <button
                                     key={idx}

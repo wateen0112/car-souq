@@ -26,7 +26,7 @@ const PullToRefreshContainer = ({
     return (
         <div
             ref={containerRef}
-            className={`relative overflow-y-auto ${className}`}
+            className={`relative overflow-y-auto overflow-x-hidden no-scrollbar ${className}`}
             style={{
                 height: '100%',
                 WebkitOverflowScrolling: 'touch',

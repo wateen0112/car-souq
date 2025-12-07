@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import type { CarouselAd } from '../types/index.ts';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { Skeleton } from '../components/ui/Skeleton';
 import { Plus, Save, X, Trash2, Loader2, MoveUp, MoveDown, ArrowRight } from 'lucide-react';
 
 const AdminCarouselAds: React.FC = () => {
@@ -154,7 +155,31 @@ const AdminCarouselAds: React.FC = () => {
         setAds(newAds);
     };
 
-    if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>;
+    if (loading) {
+        return (
+            <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                    <Skeleton className="h-10 w-48" />
+                    <Skeleton className="h-10 w-32" />
+                </div>
+                <div className="space-y-4">
+                    {[1, 2, 3].map(i => (
+                        <div key={i} className="border rounded-lg p-4 flex items-center gap-4">
+                            <Skeleton className="w-32 h-20 rounded" />
+                            <div className="flex-1 space-y-2">
+                                <Skeleton className="h-6 w-1/3" />
+                                <Skeleton className="h-4 w-1/4" />
+                            </div>
+                            <div className="flex gap-1">
+                                <Skeleton className="h-8 w-8" />
+                                <Skeleton className="h-8 w-8" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">

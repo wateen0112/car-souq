@@ -4,6 +4,7 @@ import { useCars } from '../hooks/useCars';
 import CarCard from '../components/CarCard';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { Skeleton } from '../components/ui/Skeleton';
 import { Filter as FilterIcon } from 'lucide-react';
 import PullToRefreshContainer from '../components/PullToRefreshContainer';
 
@@ -170,7 +171,13 @@ const FilterPage: React.FC = () => {
                     {loading ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {[1, 2, 3, 4, 5, 6].map(i => (
-                                <div key={i} className="h-64 bg-muted animate-pulse rounded-xl"></div>
+                                <div key={i} className="flex flex-col space-y-3">
+                                    <Skeleton className="h-48 w-full rounded-xl" />
+                                    <div className="space-y-2">
+                                        <Skeleton className="h-4 w-3/4" />
+                                        <Skeleton className="h-4 w-1/2" />
+                                    </div>
+                                </div>
                             ))}
                         </div>
                     ) : (

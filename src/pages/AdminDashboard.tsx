@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import type { Car } from '../types/index.ts';
 import { Button } from '../components/ui/Button';
-import { Plus, Pencil, Trash2, Loader2, Image as ImageIcon, ArrowRight } from 'lucide-react';
+import { Skeleton } from '../components/ui/Skeleton';
+import { Plus, Pencil, Trash2, Image as ImageIcon, ArrowRight } from 'lucide-react';
 
 const AdminDashboard: React.FC = () => {
     const [cars, setCars] = useState<Car[]>([]);
@@ -42,7 +43,56 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
-    if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>;
+    if (loading) {
+        return (
+            <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                    <Skeleton className="h-10 w-48" />
+                    <div className="flex gap-2">
+                        <Skeleton className="h-10 w-32" />
+                        <Skeleton className="h-10 w-32" />
+                    </div>
+                </div>
+
+                {/* Desktop Skeleton */}
+                <div className="hidden md:block border rounded-lg overflow-hidden">
+                    <div className="p-4 bg-muted/50 border-b flex justify-between">
+                        {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-6 w-24" />)}
+                    </div>
+                    {[1, 2, 3, 4, 5].map(i => (
+                        <div key={i} className="p-4 border-b flex justify-between items-center">
+                            <Skeleton className="h-12 w-16" />
+                            <Skeleton className="h-6 w-32" />
+                            <Skeleton className="h-6 w-24" />
+                            <Skeleton className="h-6 w-24" />
+                            <div className="flex gap-2">
+                                <Skeleton className="h-8 w-8" />
+                                <Skeleton className="h-8 w-8" />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Mobile Skeleton */}
+                <div className="md:hidden space-y-4">
+                    {[1, 2, 3].map(i => (
+                        <div key={i} className="border rounded-lg p-4 flex gap-4">
+                            <Skeleton className="h-24 w-24 rounded-lg" />
+                            <div className="flex-1 space-y-3">
+                                <Skeleton className="h-6 w-3/4" />
+                                <Skeleton className="h-4 w-1/2" />
+                                <Skeleton className="h-5 w-1/3" />
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <Skeleton className="h-8 w-16" />
+                                    <Skeleton className="h-8 w-16" />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -137,7 +187,7 @@ const AdminDashboard: React.FC = () => {
                                 <h3 className="font-bold truncate">{car.title}</h3>
                                 <p className="text-sm text-muted-foreground">{car.category}</p>
                                 <p className="text-sm font-medium text-primary mt-1">
-                                    {car.sell_price ? `${car.sell_price.toLocaleString()} ريال` : 'السعر غير محدد'}
+                                    {car.sell_price ? `${car.sell_price.toLocaleString()} $` : 'السعر غير محدد'}
                                 </p>
                             </div>
                             <div className="flex justify-end gap-2 mt-2">
