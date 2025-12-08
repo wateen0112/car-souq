@@ -6,6 +6,7 @@ import { ArrowRight, Check, Share2, MessageCircle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Skeleton';
 import PullToRefreshContainer from '../components/PullToRefreshContainer';
+import CarCard from '../components/CarCard';
 
 const CarDetails: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -13,6 +14,8 @@ const CarDetails: React.FC = () => {
     const [car, setCar] = useState<Car | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedImage, setSelectedImage] = useState<string>('');
+    const [suggestedCars, setSuggestedCars] = useState<Car[]>([]);
+    const [suggestedLoading, setSuggestedLoading] = useState(false);
 
     const fetchCar = useCallback(async () => {
         if (!id) return;
@@ -32,9 +35,31 @@ const CarDetails: React.FC = () => {
         setLoading(false);
     }, [id]);
 
+    const fetchSuggestedCars = useCallback(async () => {
+        if (!car) return;
+        setSuggestedLoading(true);
+        const { data } = await supabase
+            .from('cars')
+            .select('*')
+            .eq('category', car.category)
+            .neq('id', car.id)
+            .limit(4);
+
+        if (data) {
+            setSuggestedCars(data);
+        }
+        setSuggestedLoading(false);
+    }, [car]);
+
     useEffect(() => {
         fetchCar();
     }, [fetchCar]);
+
+    useEffect(() => {
+        if (car) {
+            fetchSuggestedCars();
+        }
+    }, [car, fetchSuggestedCars]);
 
     if (loading) {
         return (
@@ -217,6 +242,32 @@ const CarDetails: React.FC = () => {
                         )}
                     </div>
                 </div>
+
+                {/* Suggested Cars Section */}
+                {suggestedCars.length > 0 && (
+                    <div className="mt-12 space-y-6">
+                        <h2 className="text-2xl font-bold text-right">سيارات مقترحة</h2>
+                        {suggestedLoading ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                                {[1, 2, 3, 4].map(i => (
+                                    <div key={i} className="space-y-4">
+                                        <Skeleton className="aspect-[4/3] w-full rounded-xl" />
+                                        <div className="space-y-2">
+                                            <Skeleton className="h-4 w-3/4" />
+                                            <Skeleton className="h-4 w-1/2" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                                {suggestedCars.map((suggestedCar) => (
+                                    <CarCard key={suggestedCar.id} car={suggestedCar} />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </PullToRefreshContainer>
     );
