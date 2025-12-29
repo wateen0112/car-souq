@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/firebase';
+import { collection, query, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import type { Car } from '../types/index.ts';
 import { Button } from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Skeleton';
-import { Plus, Pencil, Trash2, Image as ImageIcon, ArrowRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, ImageIcon, ArrowRight } from 'lucide-react';
 
 const AdminDashboard: React.FC = () => {
     const [cars, setCars] = useState<Car[]>([]);
@@ -22,23 +23,30 @@ const AdminDashboard: React.FC = () => {
     }, [navigate]);
 
     const fetchCars = async () => {
-        const { data, error } = await supabase
-            .from('cars')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-        if (error) console.error(error);
-        if (data) setCars(data);
-        setLoading(false);
+        try {
+            const carsRef = collection(db, 'cars');
+            const q = query(carsRef, orderBy('created_at', 'desc'));
+            const querySnapshot = await getDocs(q);
+            const carsData = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as Car[];
+            setCars(carsData);
+        } catch (error) {
+            console.error('Error fetching cars:', error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleDelete = async (id: string) => {
         if (!window.confirm('هل أنت متأكد من حذف هذه السيارة؟')) return;
 
-        const { error } = await supabase.from('cars').delete().eq('id', id);
-        if (!error) {
+        try {
+            await deleteDoc(doc(db, 'cars', id));
             setCars(cars.filter(c => c.id !== id));
-        } else {
+        } catch (error) {
+            console.error('Error deleting car:', error);
             alert('حدث خطأ أثناء الحذف');
         }
     };

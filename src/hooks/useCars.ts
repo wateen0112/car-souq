@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/firebase';
+import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import type { Car } from '../types/index.ts';
 
 export function useCars() {
@@ -10,14 +11,18 @@ export function useCars() {
     const fetchCars = useCallback(async () => {
         try {
             setError(null);
-            const { data, error } = await supabase
-                .from('cars')
-                .select('*')
-                .order('created_at', { ascending: false });
+            const carsRef = collection(db, 'cars');
+            const q = query(carsRef, orderBy('created_at', 'desc'));
+            const querySnapshot = await getDocs(q);
 
-            if (error) throw error;
-            setCars(data || []);
+            const carsData = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as Car[];
+
+            setCars(carsData);
         } catch (err: any) {
+            console.error('Error fetching cars:', err);
             setError(err.message);
         } finally {
             setLoading(false);

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/firebase';
+import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import type { CarouselAd } from '../types/index.ts';
 
 export function useCarouselAds() {
@@ -10,14 +11,18 @@ export function useCarouselAds() {
     const fetchAds = useCallback(async () => {
         try {
             setError(null);
-            const { data, error } = await supabase
-                .from('carousel_ads')
-                .select('*')
-                .order('order_position', { ascending: true });
+            const adsRef = collection(db, 'carousel_ads');
+            const q = query(adsRef, orderBy('order_position', 'asc'));
+            const querySnapshot = await getDocs(q);
 
-            if (error) throw error;
-            setAds(data || []);
+            const adsData = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as CarouselAd[];
+
+            setAds(adsData || []);
         } catch (err: any) {
+            console.error('Error fetching ads:', err);
             setError(err.message);
         } finally {
             setLoading(false);

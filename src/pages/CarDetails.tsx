@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { db } from '../lib/firebase';
+import { doc, getDoc, collection, query, where, limit, getDocs } from 'firebase/firestore';
 import type { Car } from '../types/index.ts';
 import { ArrowRight, Check, Share2, MessageCircle } from 'lucide-react';
 import { Button } from '../components/ui/Button';
@@ -20,17 +21,17 @@ const CarDetails: React.FC = () => {
     const fetchCar = useCallback(async () => {
         if (!id) return;
         setLoading(true);
-        const { data } = await supabase
-            .from('cars')
-            .select('*')
-            .eq('id', id)
-            .single();
-
-        if (data) {
-            setCar(data);
-            if (data.images && data.images.length > 0) {
-                setSelectedImage(data.images[0]);
+        try {
+            const carDoc = await getDoc(doc(db, 'cars', id));
+            if (carDoc.exists()) {
+                const data = carDoc.data() as Car;
+                setCar({ ...data, id: carDoc.id });
+                if (data.images && data.images.length > 0) {
+                    setSelectedImage(data.images[0]);
+                }
             }
+        } catch (error) {
+            console.error('Error fetching car:', error);
         }
         setLoading(false);
     }, [id]);
@@ -38,15 +39,22 @@ const CarDetails: React.FC = () => {
     const fetchSuggestedCars = useCallback(async () => {
         if (!car) return;
         setSuggestedLoading(true);
-        const { data } = await supabase
-            .from('cars')
-            .select('*')
-            .eq('category', car.category)
-            .neq('id', car.id)
-            .limit(4);
+        try {
+            const carsRef = collection(db, 'cars');
+            const q = query(
+                carsRef,
+                where('category', '==', car.category),
+                limit(5)
+            );
+            const querySnapshot = await getDocs(q);
+            const suggestedData = querySnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() } as Car))
+                .filter(c => c.id !== car.id)
+                .slice(0, 4);
 
-        if (data) {
-            setSuggestedCars(data);
+            setSuggestedCars(suggestedData);
+        } catch (error) {
+            console.error('Error fetching suggested cars:', error);
         }
         setSuggestedLoading(false);
     }, [car]);

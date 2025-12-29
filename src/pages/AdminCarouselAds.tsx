@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { db, storage } from '../lib/firebase';
+import { collection, query, orderBy, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import type { CarouselAd } from '../types/index.ts';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -27,14 +29,20 @@ const AdminCarouselAds: React.FC = () => {
     }, [navigate]);
 
     const fetchAds = async () => {
-        const { data, error } = await supabase
-            .from('carousel_ads')
-            .select('*')
-            .order('order_position', { ascending: true });
-
-        if (error) console.error(error);
-        if (data) setAds(data);
-        setLoading(false);
+        try {
+            const adsRef = collection(db, 'carousel_ads');
+            const q = query(adsRef, orderBy('order_position', 'asc'));
+            const querySnapshot = await getDocs(q);
+            const adsData = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as CarouselAd[];
+            setAds(adsData);
+        } catch (error) {
+            console.error('Error fetching ads:', error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -43,26 +51,15 @@ const AdminCarouselAds: React.FC = () => {
         }
 
         const file = e.target.files[0];
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Math.random()}.${fileExt}`;
-        const filePath = `ads/${fileName}`;
+        const fileName = `${Date.now()}_${file.name}`;
+        const storageRef = ref(storage, `ads/${fileName}`);
 
         setUploading(true);
 
         try {
-            const { error: uploadError } = await supabase.storage
-                .from('car-images')
-                .upload(filePath, file);
-
-            if (uploadError) {
-                throw uploadError;
-            }
-
-            const { data } = supabase.storage
-                .from('car-images')
-                .getPublicUrl(filePath);
-
-            setNewAd({ ...newAd, image_url: data.publicUrl });
+            await uploadBytes(storageRef, file);
+            const publicUrl = await getDownloadURL(storageRef);
+            setNewAd({ ...newAd, image_url: publicUrl });
         } catch (error) {
             alert('حدث خطأ أثناء رفع الصورة');
             console.error(error);
@@ -79,22 +76,22 @@ const AdminCarouselAds: React.FC = () => {
 
         const maxOrder = ads.length > 0 ? Math.max(...ads.map(a => a.order_position)) : 0;
 
-        const { data, error } = await supabase
-            .from('carousel_ads')
-            .insert([{
+        try {
+            const adData = {
                 title: newAd.title,
                 image_url: newAd.image_url,
                 link_url: newAd.link_url || null,
                 order_position: maxOrder + 1,
-                is_active: true
-            }])
-            .select();
+                is_active: true,
+                created_at: serverTimestamp()
+            };
 
-        if (!error && data) {
-            setAds([...ads, data[0]]);
+            const docRef = await addDoc(collection(db, 'carousel_ads'), adData);
+            setAds([...ads, { id: docRef.id, ...adData } as any]);
             setNewAd({ title: '', image_url: '', link_url: '' });
             setIsAdding(false);
-        } else {
+        } catch (error) {
+            console.error('Error adding ad:', error);
             alert('حدث خطأ أثناء الإضافة');
         }
     };
@@ -102,22 +99,21 @@ const AdminCarouselAds: React.FC = () => {
     const handleDelete = async (id: string) => {
         if (!window.confirm('هل أنت متأكد من حذف هذا الإعلان؟')) return;
 
-        const { error } = await supabase.from('carousel_ads').delete().eq('id', id);
-        if (!error) {
+        try {
+            await deleteDoc(doc(db, 'carousel_ads', id));
             setAds(ads.filter(ad => ad.id !== id));
-        } else {
+        } catch (error) {
+            console.error('Error deleting ad:', error);
             alert('حدث خطأ أثناء الحذف');
         }
     };
 
     const handleToggleActive = async (id: string, currentStatus: boolean) => {
-        const { error } = await supabase
-            .from('carousel_ads')
-            .update({ is_active: !currentStatus })
-            .eq('id', id);
-
-        if (!error) {
+        try {
+            await updateDoc(doc(db, 'carousel_ads', id), { is_active: !currentStatus });
             setAds(ads.map(ad => ad.id === id ? { ...ad, is_active: !currentStatus } : ad));
+        } catch (error) {
+            console.error('Error toggling ad status:', error);
         }
     };
 
@@ -129,13 +125,15 @@ const AdminCarouselAds: React.FC = () => {
         newAds[index] = newAds[index - 1];
         newAds[index - 1] = temp;
 
-        // Update order_position
-        await Promise.all([
-            supabase.from('carousel_ads').update({ order_position: index }).eq('id', newAds[index].id),
-            supabase.from('carousel_ads').update({ order_position: index - 1 }).eq('id', newAds[index - 1].id),
-        ]);
-
-        setAds(newAds);
+        try {
+            await Promise.all([
+                updateDoc(doc(db, 'carousel_ads', newAds[index].id), { order_position: index }),
+                updateDoc(doc(db, 'carousel_ads', newAds[index - 1].id), { order_position: index - 1 }),
+            ]);
+            setAds(newAds);
+        } catch (error) {
+            console.error('Error moving ad up:', error);
+        }
     };
 
     const handleMoveDown = async (index: number) => {
@@ -146,13 +144,15 @@ const AdminCarouselAds: React.FC = () => {
         newAds[index] = newAds[index + 1];
         newAds[index + 1] = temp;
 
-        // Update order_position
-        await Promise.all([
-            supabase.from('carousel_ads').update({ order_position: index + 1 }).eq('id', newAds[index + 1].id),
-            supabase.from('carousel_ads').update({ order_position: index }).eq('id', newAds[index].id),
-        ]);
-
-        setAds(newAds);
+        try {
+            await Promise.all([
+                updateDoc(doc(db, 'carousel_ads', newAds[index + 1].id), { order_position: index + 1 }),
+                updateDoc(doc(db, 'carousel_ads', newAds[index].id), { order_position: index }),
+            ]);
+            setAds(newAds);
+        } catch (error) {
+            console.error('Error moving ad down:', error);
+        }
     };
 
     if (loading) {

@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { db, storage } from '../lib/firebase';
+import { doc, getDoc, collection, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -83,17 +85,31 @@ const AdminCarForm: React.FC = () => {
     }, [id]);
 
     const fetchCar = async () => {
+        if (!id) return;
         setLoading(true);
-        const { data } = await supabase.from('cars').select('*').eq('id', id).single();
-        if (data) {
-            setFormData({
-                ...data,
-                rent_price_daily: data.rent_price_daily || '',
-                rent_price_weekly: data.rent_price_weekly || '',
-                rent_price_monthly: data.rent_price_monthly || '',
-                rent_price_yearly: data.rent_price_yearly || '',
-                sell_price: data.sell_price || '',
-            });
+        try {
+            const carDoc = await getDoc(doc(db, 'cars', id));
+            if (carDoc.exists()) {
+                const data = carDoc.data();
+                setFormData({
+                    ...data,
+                    title: data.title || '',
+                    description: data.description || '',
+                    year: data.year || new Date().getFullYear(),
+                    category: data.category || '',
+                    color: data.color || '',
+                    renting_type: data.renting_type || 'sell',
+                    rent_price_daily: data.rent_price_daily || '',
+                    rent_price_weekly: data.rent_price_weekly || '',
+                    rent_price_monthly: data.rent_price_monthly || '',
+                    rent_price_yearly: data.rent_price_yearly || '',
+                    sell_price: data.sell_price || '',
+                    extra_features: data.extra_features || [],
+                    images: data.images || [],
+                } as any);
+            }
+        } catch (err) {
+            console.error('Error fetching car:', err);
         }
         setLoading(false);
     };
@@ -106,22 +122,15 @@ const AdminCarForm: React.FC = () => {
         const newImages: string[] = [];
 
         for (const file of files) {
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Math.random()}.${fileExt}`;
-            const filePath = `${fileName}`;
+            const fileName = `${Date.now()}_${file.name}`;
+            const storageRef = ref(storage, `car-images/${fileName}`);
 
-            const { error: uploadError } = await supabase.storage
-                .from('car-images')
-                .upload(filePath, file);
-
-            if (uploadError) {
-                console.error('Error uploading image:', uploadError);
-                continue;
-            }
-
-            const { data } = supabase.storage.from('car-images').getPublicUrl(filePath);
-            if (data) {
-                newImages.push(data.publicUrl);
+            try {
+                await uploadBytes(storageRef, file);
+                const publicUrl = await getDownloadURL(storageRef);
+                newImages.push(publicUrl);
+            } catch (error) {
+                console.error('Error uploading image:', error);
             }
         }
 
@@ -156,22 +165,22 @@ const AdminCarForm: React.FC = () => {
             rent_price_monthly: formData.rent_price_monthly ? Number(formData.rent_price_monthly) : null,
             rent_price_yearly: formData.rent_price_yearly ? Number(formData.rent_price_yearly) : null,
             sell_price: formData.sell_price ? Number(formData.sell_price) : null,
+            updated_at: serverTimestamp(),
+            ...(isEdit ? {} : { created_at: serverTimestamp() })
         };
 
-        let error;
-        if (isEdit) {
-            const { error: err } = await supabase.from('cars').update(payload).eq('id', id);
-            error = err;
-        } else {
-            const { error: err } = await supabase.from('cars').insert([payload]);
-            error = err;
-        }
-
-        setLoading(false);
-        if (!error) {
+        try {
+            if (isEdit && id) {
+                await updateDoc(doc(db, 'cars', id), payload as any);
+            } else {
+                await addDoc(collection(db, 'cars'), payload);
+            }
             navigate('/admin/dashboard');
-        } else {
+        } catch (error: any) {
+            console.error('Error saving car:', error);
             alert('حدث خطأ: ' + error.message);
+        } finally {
+            setLoading(false);
         }
     };
 
