@@ -1,33 +1,46 @@
 import { useEffect, useState, useCallback } from 'react';
-import { db } from '../lib/firebase';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore';
-import type { Car } from '../types/index.ts';
+import { api, type Car } from '../../api';
 
-export function useCars() {
+export function useCars(userId?: string) {
     const [cars, setCars] = useState<Car[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const fetchCars = useCallback(async () => {
+        const effectiveUserId = userId || localStorage.getItem('user-id');
+        console.log('useCars: Fetching for userId:', effectiveUserId);
+
+        if (!effectiveUserId) {
+            console.warn('useCars: No userId available, skipping fetch');
+            setLoading(false);
+            return;
+        }
+
+        setLoading(true);
         try {
             setError(null);
-            const carsRef = collection(db, 'cars');
-            const q = query(carsRef, orderBy('created_at', 'desc'));
-            const querySnapshot = await getDocs(q);
+            const response = await api.getCars(effectiveUserId);
 
-            const carsData = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            })) as Car[];
+            // Handle paginated response structure
+            const rawCars = response.data || (Array.isArray(response) ? response : []);
 
-            setCars(carsData);
+            const normalizedCars = Array.isArray(rawCars) ? rawCars.map((car: any) => ({
+                ...car,
+                // Parse numbers from nested pricing or flatten
+                sale_price: car.pricing?.sale_price ? Number(car.pricing.sale_price) : (car.sale_price ? Number(car.sale_price) : null),
+                daily_rent_price: car.pricing?.daily_rent_price ? Number(car.pricing.daily_rent_price) : (car.daily_rent_price ? Number(car.daily_rent_price) : null),
+                weekly_rent_price: car.pricing?.weekly_rent_price ? Number(car.pricing.weekly_rent_price) : (car.weekly_rent_price ? Number(car.weekly_rent_price) : null),
+                monthly_rent_price: car.pricing?.monthly_rent_price ? Number(car.pricing.monthly_rent_price) : (car.monthly_rent_price ? Number(car.monthly_rent_price) : null),
+            })) : [];
+
+            setCars(normalizedCars);
         } catch (err: any) {
             console.error('Error fetching cars:', err);
-            setError(err.message);
+            setError(err.message || 'Failed to fetch cars');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [userId]);
 
     const refetch = useCallback(async () => {
         setLoading(true);

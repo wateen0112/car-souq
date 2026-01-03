@@ -1,57 +1,72 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { db } from '../lib/firebase';
-import { collection, query, orderBy, getDocs, deleteDoc, doc } from 'firebase/firestore';
-import type { Car } from '../types/index.ts';
+import { api, type User } from '../../api';
+import { useCars } from '../hooks/useCars';
+import { useCarouselAds } from '../hooks/useCarouselAds';
 import { Button } from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Skeleton';
-import { Plus, Pencil, Trash2, ImageIcon, ArrowRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, ImageIcon, ArrowRight, Car, LayoutDashboard } from 'lucide-react';
 
 const AdminDashboard: React.FC = () => {
-    const [cars, setCars] = useState<Car[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState<User | null>(null);
+    const [userLoading, setUserLoading] = useState(true);
+
+    // Pass user ID to hooks. They will re-fetch when user is set.
+    const { cars, loading: carsLoading, refetch: refetchCars } = useCars(user?.id?.toString());
+    const { ads, loading: adsLoading, refetch: refetchAds } = useCarouselAds(user?.id?.toString());
     const navigate = useNavigate();
 
     useEffect(() => {
-        const isAdmin = localStorage.getItem('admin_session') === 'true';
-        if (!isAdmin) {
-            navigate('/admin/login');
-            return;
-        }
+        const fetchUserData = async () => {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                navigate('/admin/login');
+                return;
+            }
 
-        fetchCars();
+            try {
+                const response = await api.getUser();
+                console.log('AdminDashboard: getUser response:', response);
+
+                // Handle response unwrapping (some APIs return { data: User }, others return User directly)
+                const userData = response.data || response;
+
+                if (!userData || !userData.id) {
+                    console.error('AdminDashboard: Invalid user data received', userData);
+                    throw new Error('Invalid user data');
+                }
+
+                setUser(userData);
+
+                // Store user-id for other API calls that depend on it
+                localStorage.setItem('user-id', userData.id.toString());
+            } catch (error) {
+                console.error('Error fetching user data:', error);
+                // If token is invalid, redirect to login
+                localStorage.removeItem('token');
+                navigate('/admin/login');
+            } finally {
+                setUserLoading(false);
+            }
+        };
+
+        fetchUserData();
     }, [navigate]);
 
-    const fetchCars = async () => {
-        try {
-            const carsRef = collection(db, 'cars');
-            const q = query(carsRef, orderBy('created_at', 'desc'));
-            const querySnapshot = await getDocs(q);
-            const carsData = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            })) as Car[];
-            setCars(carsData);
-        } catch (error) {
-            console.error('Error fetching cars:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const handleDelete = async (id: string) => {
         if (!window.confirm('هل أنت متأكد من حذف هذه السيارة؟')) return;
 
         try {
-            await deleteDoc(doc(db, 'cars', id));
-            setCars(cars.filter(c => c.id !== id));
+            await api.deleteCar(id);
+            refetchCars(); // Refetch list after deletion
         } catch (error) {
             console.error('Error deleting car:', error);
             alert('حدث خطأ أثناء الحذف');
         }
     };
 
-    if (loading) {
+    if (userLoading || carsLoading || adsLoading) {
         return (
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
@@ -109,7 +124,6 @@ const AdminDashboard: React.FC = () => {
                     <Link to="/">
                         <Button variant="ghost" size="sm" className="gap-2">
                             <ArrowRight size={16} />
-
                         </Button>
                     </Link>
                     <h1 className="text-3xl font-bold">لوحة التحكم</h1>
@@ -130,6 +144,39 @@ const AdminDashboard: React.FC = () => {
                 </div>
             </div>
 
+            {/* Stats Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-card p-6 rounded-xl border flex items-center gap-4">
+                    <div className="p-3 bg-primary/10 rounded-lg text-primary">
+                        <Car size={24} />
+                    </div>
+                    <div>
+                        <p className="text-sm text-muted-foreground font-medium">إجمالي السيارات</p>
+                        <p className="text-2xl font-bold">{cars.length}</p>
+                    </div>
+                </div>
+                <div className="bg-card p-6 rounded-xl border flex items-center gap-4">
+                    <div className="p-3 bg-primary/10 rounded-lg text-primary">
+                        <ImageIcon size={24} />
+                    </div>
+                    <div>
+                        <p className="text-sm text-muted-foreground font-medium">إعلانات Carousel</p>
+                        <p className="text-2xl font-bold">{ads.length}</p>
+                    </div>
+                </div>
+                {user && (
+                    <div className="bg-card p-6 rounded-xl border flex items-center gap-4">
+                        <div className="p-3 bg-primary/10 rounded-lg text-primary">
+                            <LayoutDashboard size={24} />
+                        </div>
+                        <div>
+                            <p className="text-sm text-muted-foreground font-medium">أهلاً، {user.name}</p>
+                            <p className="text-xs text-muted-foreground truncate max-w-[150px]">{user.email}</p>
+                        </div>
+                    </div>
+                )}
+            </div>
+
             {/* Desktop Table View */}
             <div className="hidden md:block border rounded-lg overflow-hidden">
                 <table className="w-full text-sm text-right">
@@ -137,12 +184,12 @@ const AdminDashboard: React.FC = () => {
                         <tr>
                             <th className="p-4 font-medium">الصورة</th>
                             <th className="p-4 font-medium">العنوان</th>
-                            <th className="p-4 font-medium">التصنيف</th>
-                            <th className="p-4 font-medium">السعر (بيع)</th>
+                            <th className="p-4 font-medium">النوع</th>
+                            <th className="p-4 font-medium">السعر</th>
                             <th className="p-4 font-medium">الإجراءات</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y">
+                    <tbody className="divide-y text-foreground">
                         {cars.map(car => (
                             <tr key={car.id} className="bg-card hover:bg-muted/50 transition-colors">
                                 <td className="p-4">
@@ -151,8 +198,12 @@ const AdminDashboard: React.FC = () => {
                                     </div>
                                 </td>
                                 <td className="p-4 font-medium">{car.title}</td>
-                                <td className="p-4">{car.category}</td>
-                                <td className="p-4">{car.sell_price ? car.sell_price.toLocaleString() : '-'}</td>
+                                <td className="p-4">{car.type}</td>
+                                <td className="p-4">
+                                    {car.listing_type === 'sale' && car.sale_price ? `${car.sale_price.toLocaleString()} $` :
+                                        car.listing_type === 'rent' && car.daily_rent_price ? `${car.daily_rent_price.toLocaleString()} $/يوم` :
+                                            'متعدد'}
+                                </td>
                                 <td className="p-4">
                                     <div className="flex items-center gap-2">
                                         <Link to={`/admin/cars/edit/${car.id}`}>
@@ -164,7 +215,7 @@ const AdminDashboard: React.FC = () => {
                                             variant="ghost"
                                             size="icon"
                                             className="h-8 w-8 text-destructive hover:text-destructive"
-                                            onClick={() => handleDelete(car.id)}
+                                            onClick={() => car.id && handleDelete(car.id)}
                                         >
                                             <Trash2 size={14} />
                                         </Button>
@@ -193,9 +244,11 @@ const AdminDashboard: React.FC = () => {
                         <div className="flex-1 min-w-0 flex flex-col justify-between">
                             <div>
                                 <h3 className="font-bold truncate">{car.title}</h3>
-                                <p className="text-sm text-muted-foreground">{car.category}</p>
+                                <p className="text-sm text-muted-foreground">{car.type}</p>
                                 <p className="text-sm font-medium text-primary mt-1">
-                                    {car.sell_price ? `${car.sell_price.toLocaleString()} $` : 'السعر غير محدد'}
+                                    {car.listing_type === 'sale' && car.sale_price ? `${car.sale_price.toLocaleString()} $` :
+                                        car.listing_type === 'rent' && car.daily_rent_price ? `${car.daily_rent_price.toLocaleString()} $/يوم` :
+                                            'متعدد'}
                                 </p>
                             </div>
                             <div className="flex justify-end gap-2 mt-2">
@@ -209,7 +262,7 @@ const AdminDashboard: React.FC = () => {
                                     variant="destructive"
                                     size="sm"
                                     className="h-8 gap-1"
-                                    onClick={() => handleDelete(car.id)}
+                                    onClick={() => car.id && handleDelete(car.id)}
                                 >
                                     <Trash2 size={14} />
                                     حذف

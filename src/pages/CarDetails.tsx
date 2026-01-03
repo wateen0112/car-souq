@@ -1,34 +1,62 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db } from '../lib/firebase';
-import { doc, getDoc, collection, query, where, limit, getDocs } from 'firebase/firestore';
-import type { Car } from '../types/index.ts';
-import { ArrowRight, Check, Share2, MessageCircle } from 'lucide-react';
+import { api, type Car } from '../../api';
+import { ArrowRight, Check, Share2, MessageCircle, ImageIcon } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Skeleton } from '../components/ui/Skeleton';
 import PullToRefreshContainer from '../components/PullToRefreshContainer';
 import CarCard from '../components/CarCard';
 
 const CarDetails: React.FC = () => {
-    const { id } = useParams<{ id: string }>();
+    const { id, userId } = useParams<{ id: string; userId?: string }>();
     const navigate = useNavigate();
     const [car, setCar] = useState<Car | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedImage, setSelectedImage] = useState<string>('');
     const [suggestedCars, setSuggestedCars] = useState<Car[]>([]);
     const [suggestedLoading, setSuggestedLoading] = useState(false);
-
+    localStorage.setItem('user-id', userId ?? '')
     const fetchCar = useCallback(async () => {
         if (!id) return;
         setLoading(true);
         try {
-            const carDoc = await getDoc(doc(db, 'cars', id));
-            if (carDoc.exists()) {
-                const data = carDoc.data() as Car;
-                setCar({ ...data, id: carDoc.id });
-                if (data.images && data.images.length > 0) {
-                    setSelectedImage(data.images[0]);
-                }
+            const response = await api.getCar(id);
+            let data = response.data || response;
+            console.log('retrived data : ', data);
+
+            // Handle nested data structure (e.g. { data: [...] } or { data: {...} })
+            if (data && data.data && !data.id) {
+                data = data.data;
+            }
+
+            // Handle array response (take first item)
+            if (Array.isArray(data)) {
+                data = data.length > 0 ? data[0] : null;
+            }
+
+            if (!data) throw new Error('Car data not found');
+
+            // Normalize data to match Car interface (handle nested pricing)
+            const normalizedCar: Car = {
+                id: data.id,
+                title: data.title,
+                description: data.description,
+                type: data.type,
+                model: data.model,
+                manufacture_year: data.manufacture_year,
+                listing_type: data.listing_type,
+                images: data.images || [],
+                additional_features: data.additional_features || [],
+                // Map pricing fields from nested object if present, or direct properties
+                sale_price: data.pricing?.sale_price ? Number(data.pricing.sale_price) : (data.sale_price ? Number(data.sale_price) : null),
+                daily_rent_price: data.pricing?.daily_rent_price ? Number(data.pricing.daily_rent_price) : (data.daily_rent_price ? Number(data.daily_rent_price) : null),
+                weekly_rent_price: data.pricing?.weekly_rent_price ? Number(data.pricing.weekly_rent_price) : (data.weekly_rent_price ? Number(data.weekly_rent_price) : null),
+                monthly_rent_price: data.pricing?.monthly_rent_price ? Number(data.pricing.monthly_rent_price) : (data.monthly_rent_price ? Number(data.monthly_rent_price) : null),
+            };
+
+            setCar(normalizedCar);
+            if (normalizedCar.images && normalizedCar.images.length > 0) {
+                setSelectedImage(normalizedCar.images[0]);
             }
         } catch (error) {
             console.error('Error fetching car:', error);
@@ -40,19 +68,15 @@ const CarDetails: React.FC = () => {
         if (!car) return;
         setSuggestedLoading(true);
         try {
-            const carsRef = collection(db, 'cars');
-            const q = query(
-                carsRef,
-                where('category', '==', car.category),
-                limit(5)
-            );
-            const querySnapshot = await getDocs(q);
-            const suggestedData = querySnapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() } as Car))
-                .filter(c => c.id !== car.id)
+            const response = await api.getCars();
+            const allCars = response.data || response;
+
+            // Filter locally for now
+            const suggested = allCars
+                .filter((c: Car) => c.id !== car.id && c.type === car.type)
                 .slice(0, 4);
 
-            setSuggestedCars(suggestedData);
+            setSuggestedCars(suggested);
         } catch (error) {
             console.error('Error fetching suggested cars:', error);
         }
@@ -106,8 +130,8 @@ const CarDetails: React.FC = () => {
     }
     if (!car) return <div className="text-center p-10">السيارة غير موجودة</div>;
 
-    const formatPrice = (price?: number) => {
-        if (!price) return 'غير محدد';
+    const formatPrice = (price?: number | null) => {
+        if (price === undefined || price === null) return 'غير محدد';
         return new Intl.NumberFormat('en', { style: 'currency', currency: 'usd' }).format(price);
     };
 
@@ -164,7 +188,10 @@ const CarDetails: React.FC = () => {
                             {selectedImage ? (
                                 <img src={selectedImage} alt={car.title} className="w-full h-full object-cover" />
                             ) : (
-                                <div className="flex items-center justify-center h-full text-muted-foreground">لا توجد صور</div>
+                                <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground/30">
+                                    <ImageIcon strokeWidth={1} className="w-20 h-20 mb-2" />
+                                    <p>لا توجد صورة</p>
+                                </div>
                             )}
                         </div>
                         <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
@@ -186,14 +213,13 @@ const CarDetails: React.FC = () => {
                             <h1 className="text-3xl font-bold mb-2">{car.title}</h1>
                             <div className="flex flex-wrap gap-2">
                                 <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-medium">
-                                    {car.category}
+                                    {car.type}
                                 </span>
                                 <span className="bg-secondary text-secondary-foreground px-3 py-1 rounded-full text-sm font-medium">
-                                    {car.year}
+                                    {car.manufacture_year}
                                 </span>
-                                <span className="bg-secondary text-secondary-foreground px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
-                                    <div className="w-3 h-3 rounded-full border" style={{ backgroundColor: car.color }}></div>
-                                    {car.color}
+                                <span className="bg-secondary text-secondary-foreground px-3 py-1 rounded-full text-sm font-medium">
+                                    {car.model}
                                 </span>
                             </div>
                         </div>
@@ -201,29 +227,33 @@ const CarDetails: React.FC = () => {
                         <div className="bg-card border rounded-xl p-6 space-y-4 shadow-sm">
                             <h3 className="font-semibold text-lg">الأسعار</h3>
                             <div className="grid grid-cols-2 gap-4">
-                                {car.sell_price && (
+                                {(car.listing_type === 'sale' || car.listing_type === 'both') && (
                                     <div className="space-y-1">
                                         <span className="text-sm text-muted-foreground">سعر البيع</span>
-                                        <div className="text-xl font-bold text-primary">{formatPrice(car.sell_price)}</div>
+                                        <div className="text-xl font-bold text-primary">{formatPrice(car.sale_price)}</div>
                                     </div>
                                 )}
-                                {car.rent_price_daily && (
-                                    <div className="space-y-1">
-                                        <span className="text-sm text-muted-foreground">إيجار يومي</span>
-                                        <div className="text-xl font-bold text-primary">{formatPrice(car.rent_price_daily)}</div>
-                                    </div>
-                                )}
-                                {car.rent_price_weekly && (
-                                    <div className="space-y-1">
-                                        <span className="text-sm text-muted-foreground">إيجار أسبوعي</span>
-                                        <div className="text-xl font-bold text-primary">{formatPrice(car.rent_price_weekly)}</div>
-                                    </div>
-                                )}
-                                {car.rent_price_monthly && (
-                                    <div className="space-y-1">
-                                        <span className="text-sm text-muted-foreground">إيجار شهري</span>
-                                        <div className="text-xl font-bold text-primary">{formatPrice(car.rent_price_monthly)}</div>
-                                    </div>
+                                {(car.listing_type === 'rent' || car.listing_type === 'both') && (
+                                    <>
+                                        {car.daily_rent_price && (
+                                            <div className="space-y-1">
+                                                <span className="text-sm text-muted-foreground">إيجار يومي</span>
+                                                <div className="text-xl font-bold text-primary">{formatPrice(car.daily_rent_price)}</div>
+                                            </div>
+                                        )}
+                                        {car.weekly_rent_price && (
+                                            <div className="space-y-1">
+                                                <span className="text-sm text-muted-foreground">إيجار أسبوعي</span>
+                                                <div className="text-xl font-bold text-primary">{formatPrice(car.weekly_rent_price)}</div>
+                                            </div>
+                                        )}
+                                        {car.monthly_rent_price && (
+                                            <div className="space-y-1">
+                                                <span className="text-sm text-muted-foreground">إيجار شهري</span>
+                                                <div className="text-xl font-bold text-primary">{formatPrice(car.monthly_rent_price)}</div>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -235,11 +265,11 @@ const CarDetails: React.FC = () => {
                             </p>
                         </div>
 
-                        {car.extra_features && car.extra_features.length > 0 && (
+                        {car.additional_features && car.additional_features.length > 0 && (
                             <div className="space-y-2">
                                 <h3 className="font-semibold text-lg">المميزات الإضافية</h3>
                                 <div className="grid grid-cols-2 gap-2">
-                                    {car.extra_features.map((feature, idx) => (
+                                    {car.additional_features.map((feature, idx) => (
                                         <div key={idx} className="flex items-center gap-2 text-sm text-muted-foreground">
                                             <Check className="w-4 h-4 text-primary" />
                                             {feature}

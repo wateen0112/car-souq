@@ -1,33 +1,34 @@
 import { useEffect, useState, useCallback } from 'react';
-import { db } from '../lib/firebase';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore';
-import type { CarouselAd } from '../types/index.ts';
+import { api, type CarouselItem } from '../../api';
 
-export function useCarouselAds() {
-    const [ads, setAds] = useState<CarouselAd[]>([]);
+export function useCarouselAds(userId?: string) {
+    const [ads, setAds] = useState<CarouselItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const fetchAds = useCallback(async () => {
+        const effectiveUserId = userId || localStorage.getItem('user-id');
+        console.log('useCarouselAds: Fetching for userId:', effectiveUserId);
+
+        if (!effectiveUserId) {
+            console.warn('useCarouselAds: No userId available, skipping fetch');
+            setLoading(false);
+            return;
+        }
+
+        setLoading(true);
         try {
             setError(null);
-            const adsRef = collection(db, 'carousel_ads');
-            const q = query(adsRef, orderBy('order_position', 'asc'));
-            const querySnapshot = await getDocs(q);
-
-            const adsData = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            })) as CarouselAd[];
-
-            setAds(adsData || []);
+            const response = await api.getCarouselItems(effectiveUserId);
+            const adsData = response.data || response;
+            setAds(Array.isArray(adsData) ? adsData : []);
         } catch (err: any) {
             console.error('Error fetching ads:', err);
-            setError(err.message);
+            setError(err.message || 'Failed to fetch ads');
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [userId]);
 
     const refetch = useCallback(async () => {
         setLoading(true);

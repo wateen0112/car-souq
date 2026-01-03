@@ -1,22 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { db, storage } from '../lib/firebase';
-import { collection, query, orderBy, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import type { CarouselAd } from '../types/index.ts';
+import { api, type CarouselItem } from '../../api';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Skeleton } from '../components/ui/Skeleton';
 import { Plus, Save, X, Trash2, Loader2, MoveUp, MoveDown, ArrowRight } from 'lucide-react';
 
 const AdminCarouselAds: React.FC = () => {
-    const [ads, setAds] = useState<CarouselAd[]>([]);
+    const [ads, setAds] = useState<CarouselItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [isAdding, setIsAdding] = useState(false);
-    const [newAd, setNewAd] = useState({ title: '', image_url: '', link_url: '' });
-    const navigate = useNavigate();
+    const [newAd, setNewAd] = useState<{
+        title: string;
+        image: string;
+        link: string;
+        imageFile: File | null;
+    }>({ title: '', image: '', link: '', imageFile: null });
 
-    const [uploading, setUploading] = useState(false);
+    const navigate = useNavigate();
 
     useEffect(() => {
         const isAdmin = localStorage.getItem('admin_session') === 'true';
@@ -30,14 +31,13 @@ const AdminCarouselAds: React.FC = () => {
 
     const fetchAds = async () => {
         try {
-            const adsRef = collection(db, 'carousel_ads');
-            const q = query(adsRef, orderBy('order_position', 'asc'));
-            const querySnapshot = await getDocs(q);
-            const adsData = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            })) as CarouselAd[];
-            setAds(adsData);
+            const response = await api.getCarouselItems();
+            const adsData = response.data || response;
+            // Ensure order_position sort
+            const sortedAds = Array.isArray(adsData) ? adsData.sort((a: CarouselItem, b: CarouselItem) =>
+                (a.order_position || 0) - (b.order_position || 0)
+            ) : [];
+            setAds(sortedAds);
         } catch (error) {
             console.error('Error fetching ads:', error);
         } finally {
@@ -45,50 +45,42 @@ const AdminCarouselAds: React.FC = () => {
         }
     };
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files || e.target.files.length === 0) {
-            return;
-        }
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
 
         const file = e.target.files[0];
-        const fileName = `${Date.now()}_${file.name}`;
-        const storageRef = ref(storage, `ads/${fileName}`);
+        const previewUrl = URL.createObjectURL(file);
 
-        setUploading(true);
-
-        try {
-            await uploadBytes(storageRef, file);
-            const publicUrl = await getDownloadURL(storageRef);
-            setNewAd({ ...newAd, image_url: publicUrl });
-        } catch (error) {
-            alert('حدث خطأ أثناء رفع الصورة');
-            console.error(error);
-        } finally {
-            setUploading(false);
-        }
+        setNewAd(prev => ({
+            ...prev,
+            imageFile: file,
+            image: previewUrl
+        }));
     };
 
     const handleAdd = async () => {
-        if (!newAd.title || !newAd.image_url) {
+        if (!newAd.title || !newAd.imageFile) {
             alert('يرجى إدخال العنوان واختيار الصورة');
             return;
         }
 
-        const maxOrder = ads.length > 0 ? Math.max(...ads.map(a => a.order_position)) : 0;
+        const maxOrder = ads.length > 0 ? Math.max(...ads.map(a => a.order_position || 0)) : 0;
 
         try {
-            const adData = {
-                title: newAd.title,
-                image_url: newAd.image_url,
-                link_url: newAd.link_url || null,
-                order_position: maxOrder + 1,
-                is_active: true,
-                created_at: serverTimestamp()
-            };
+            const formData = new FormData();
+            formData.append('title', newAd.title);
+            formData.append('image', newAd.imageFile);
+            if (newAd.link) formData.append('link', newAd.link);
+            formData.append('order_position', (maxOrder + 1).toString());
+            // is_active defaults to true usually, or send it
+            formData.append('is_active', '1');
 
-            const docRef = await addDoc(collection(db, 'carousel_ads'), adData);
-            setAds([...ads, { id: docRef.id, ...adData } as any]);
-            setNewAd({ title: '', image_url: '', link_url: '' });
+            await api.createCarouselItem(formData);
+
+            // Refresh list
+            fetchAds();
+
+            setNewAd({ title: '', image: '', link: '', imageFile: null });
             setIsAdding(false);
         } catch (error) {
             console.error('Error adding ad:', error);
@@ -96,11 +88,11 @@ const AdminCarouselAds: React.FC = () => {
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!window.confirm('هل أنت متأكد من حذف هذا الإعلان؟')) return;
+    const handleDelete = async (id?: string) => {
+        if (!id || !window.confirm('هل أنت متأكد من حذف هذا الإعلان؟')) return;
 
         try {
-            await deleteDoc(doc(db, 'carousel_ads', id));
+            await api.deleteCarouselItem(id);
             setAds(ads.filter(ad => ad.id !== id));
         } catch (error) {
             console.error('Error deleting ad:', error);
@@ -108,9 +100,14 @@ const AdminCarouselAds: React.FC = () => {
         }
     };
 
-    const handleToggleActive = async (id: string, currentStatus: boolean) => {
+    const handleToggleActive = async (id: string, currentStatus?: boolean) => {
         try {
-            await updateDoc(doc(db, 'carousel_ads', id), { is_active: !currentStatus });
+            const formData = new FormData();
+            formData.append('_method', 'PUT');
+            formData.append('is_active', (!currentStatus ? '1' : '0'));
+
+            await api.updateCarouselItem(id, formData);
+
             setAds(ads.map(ad => ad.id === id ? { ...ad, is_active: !currentStatus } : ad));
         } catch (error) {
             console.error('Error toggling ad status:', error);
@@ -120,38 +117,83 @@ const AdminCarouselAds: React.FC = () => {
     const handleMoveUp = async (index: number) => {
         if (index === 0) return;
 
+        const currentAd = ads[index];
+        const prevAd = ads[index - 1];
+        if (!currentAd.id || !prevAd.id) return;
+
+        // Swap order in UI instantly
         const newAds = [...ads];
-        const temp = newAds[index];
-        newAds[index] = newAds[index - 1];
-        newAds[index - 1] = temp;
+        newAds[index] = prevAd;
+        newAds[index - 1] = currentAd;
+
+        // Update order values locally
+        const currentOrder = currentAd.order_position;
+        const prevOrder = prevAd.order_position;
+        newAds[index].order_position = currentOrder;
+        newAds[index - 1].order_position = prevOrder; // swap values implies logical swap?
+        // Actually, we want to swap their order_positions.
+        // Let's assume order_position creates the sort.
+
+        // Better implementation: Just swap items in array AND swap their order_position properties then save.
+        const tempOrder = newAds[index].order_position;
+        newAds[index].order_position = newAds[index - 1].order_position;
+        newAds[index - 1].order_position = tempOrder;
+
+        setAds([...newAds]);
 
         try {
+            // Update backend
+            const form1 = new FormData();
+            form1.append('_method', 'PUT');
+            form1.append('order_position', newAds[index].order_position!.toString());
+
+            const form2 = new FormData();
+            form2.append('_method', 'PUT');
+            form2.append('order_position', newAds[index - 1].order_position!.toString());
+
             await Promise.all([
-                updateDoc(doc(db, 'carousel_ads', newAds[index].id), { order_position: index }),
-                updateDoc(doc(db, 'carousel_ads', newAds[index - 1].id), { order_position: index - 1 }),
+                api.updateCarouselItem(newAds[index].id!, form1),
+                api.updateCarouselItem(newAds[index - 1].id!, form2),
             ]);
-            setAds(newAds);
         } catch (error) {
             console.error('Error moving ad up:', error);
+            fetchAds(); // Revert on error
         }
     };
 
     const handleMoveDown = async (index: number) => {
         if (index === ads.length - 1) return;
 
+        const currentAd = ads[index];
+        const nextAd = ads[index + 1];
+        if (!currentAd.id || !nextAd.id) return;
+
         const newAds = [...ads];
-        const temp = newAds[index];
-        newAds[index] = newAds[index + 1];
-        newAds[index + 1] = temp;
+        newAds[index] = nextAd;
+        newAds[index + 1] = currentAd;
+
+        const tempOrder = newAds[index].order_position;
+        newAds[index].order_position = newAds[index + 1].order_position;
+        newAds[index + 1].order_position = tempOrder;
+
+        setAds([...newAds]);
 
         try {
+            const form1 = new FormData();
+            form1.append('_method', 'PUT');
+            form1.append('order_position', newAds[index].order_position!.toString());
+
+            const form2 = new FormData();
+            form2.append('_method', 'PUT');
+            form2.append('order_position', newAds[index + 1].order_position!.toString());
+
             await Promise.all([
-                updateDoc(doc(db, 'carousel_ads', newAds[index + 1].id), { order_position: index + 1 }),
-                updateDoc(doc(db, 'carousel_ads', newAds[index].id), { order_position: index }),
+                api.updateCarouselItem(newAds[index].id!, form1),
+                api.updateCarouselItem(newAds[index + 1].id!, form2),
             ]);
-            setAds(newAds);
         } catch (error) {
             console.error('Error moving ad down:', error);
+            fetchAds();
         }
     };
 
@@ -228,15 +270,13 @@ const AdminCarouselAds: React.FC = () => {
                                     type="file"
                                     accept="image/*"
                                     onChange={handleImageUpload}
-                                    disabled={uploading}
                                     className="cursor-pointer"
                                 />
-                                {uploading && <Loader2 className="animate-spin text-primary" />}
                             </div>
-                            {newAd.image_url && (
+                            {newAd.image && (
                                 <div className="mt-2 relative w-full h-40 bg-muted rounded-lg overflow-hidden border">
                                     <img
-                                        src={newAd.image_url}
+                                        src={newAd.image}
                                         alt="Preview"
                                         className="w-full h-full object-cover"
                                     />
@@ -248,8 +288,8 @@ const AdminCarouselAds: React.FC = () => {
                             <label className="text-sm font-medium mb-1.5 block">رابط التوجيه (اختياري)</label>
                             <Input
                                 placeholder="/filter أو https://example.com"
-                                value={newAd.link_url}
-                                onChange={e => setNewAd({ ...newAd, link_url: e.target.value })}
+                                value={newAd.link}
+                                onChange={e => setNewAd({ ...newAd, link: e.target.value })}
                             />
                             <p className="text-xs text-muted-foreground mt-1">
                                 الرابط الذي سيتم فتحه عند النقر على الإعلان
@@ -275,14 +315,14 @@ const AdminCarouselAds: React.FC = () => {
                     <div key={ad.id} className="bg-card border rounded-lg p-4 flex items-center gap-4">
                         {/* Preview Image */}
                         <div className="w-32 h-20 rounded overflow-hidden bg-muted flex-shrink-0">
-                            <img src={ad.image_url} alt={ad.title} className="w-full h-full object-cover" />
+                            <img src={ad.image} alt={ad.title} className="w-full h-full object-cover" />
                         </div>
 
                         {/* Info */}
                         <div className="flex-1 min-w-0">
                             <h3 className="font-semibold truncate">{ad.title}</h3>
                             <p className="text-sm text-muted-foreground truncate">
-                                {ad.link_url ? `الرابط: ${ad.link_url}` : 'بدون رابط'}
+                                {ad.link ? `الرابط: ${ad.link}` : 'بدون رابط'}
                             </p>
                             <div className="flex items-center gap-2 mt-1">
                                 <span className={`text-xs px-2 py-0.5 rounded ${ad.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
@@ -316,7 +356,7 @@ const AdminCarouselAds: React.FC = () => {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8"
-                                onClick={() => handleToggleActive(ad.id, ad.is_active)}
+                                onClick={() => ad.id && handleToggleActive(ad.id, ad.is_active)}
                             >
                                 {ad.is_active ? '👁️' : '🙈'}
                             </Button>
@@ -324,7 +364,7 @@ const AdminCarouselAds: React.FC = () => {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-destructive hover:text-destructive"
-                                onClick={() => handleDelete(ad.id)}
+                                onClick={() => ad.id && handleDelete(ad.id)}
                             >
                                 <Trash2 size={16} />
                             </Button>

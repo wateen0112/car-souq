@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import type { CarouselAd } from '../types/index.ts';
+import type { CarouselItem } from '../../api';
 
 interface HeroCarouselProps {
-    ads: CarouselAd[];
+    ads: CarouselItem[];
 }
 
 const HeroCarousel = ({ ads }: HeroCarouselProps) => {
@@ -12,8 +12,8 @@ const HeroCarousel = ({ ads }: HeroCarouselProps) => {
 
     // Filter only active ads and sort by order_position
     const activeAds = ads
-        .filter(ad => ad.is_active)
-        .sort((a, b) => a.order_position - b.order_position);
+        .filter(ad => ad.is_active !== false)
+        .sort((a, b) => (a.order_position || 0) - (b.order_position || 0));
 
     // Auto-play functionality
     useEffect(() => {
@@ -42,14 +42,14 @@ const HeroCarousel = ({ ads }: HeroCarouselProps) => {
         goToSlide(newIndex);
     };
 
-    const handleAdClick = (ad: CarouselAd) => {
-        if (ad.link_url) {
+    const handleAdClick = (ad: CarouselItem) => {
+        if (ad.link) {
             // Check if it's an external link
-            if (ad.link_url.startsWith('http://') || ad.link_url.startsWith('https://')) {
-                window.open(ad.link_url, '_blank', 'noopener,noreferrer');
+            if (ad.link.startsWith('http://') || ad.link.startsWith('https://')) {
+                window.open(ad.link, '_blank', 'noopener,noreferrer');
             } else {
                 // Internal link - navigate using router
-                window.location.href = ad.link_url;
+                window.location.href = ad.link;
             }
         }
     };
@@ -70,11 +70,11 @@ const HeroCarousel = ({ ads }: HeroCarouselProps) => {
                     >
                         <div
                             onClick={() => handleAdClick(ad)}
-                            className={`relative w-full h-full ${ad.link_url ? 'cursor-pointer' : ''}`}
+                            className={`relative w-full h-full ${ad.link ? 'cursor-pointer' : ''}`}
                         >
                             {/* Image */}
                             <img
-                                src={ad.image_url}
+                                src={ad.image}
                                 alt={ad.title}
                                 className="w-full h-full object-cover"
                             />
@@ -122,8 +122,8 @@ const HeroCarousel = ({ ads }: HeroCarouselProps) => {
                             key={index}
                             onClick={() => goToSlide(index)}
                             className={`transition-all duration-300 rounded-full ${index === currentIndex
-                                    ? 'bg-white w-8 h-2'
-                                    : 'bg-white/50 hover:bg-white/75 w-2 h-2'
+                                ? 'bg-white w-8 h-2'
+                                : 'bg-white/50 hover:bg-white/75 w-2 h-2'
                                 }`}
                             aria-label={`Go to slide ${index + 1}`}
                         />
@@ -135,10 +135,10 @@ const HeroCarousel = ({ ads }: HeroCarouselProps) => {
             {activeAds.length === 1 && (
                 <div
                     onClick={() => handleAdClick(activeAds[0])}
-                    className={`relative w-full h-full ${activeAds[0].link_url ? 'cursor-pointer' : ''}`}
+                    className={`relative w-full h-full ${activeAds[0].link ? 'cursor-pointer' : ''}`}
                 >
                     <img
-                        src={activeAds[0].image_url}
+                        src={activeAds[0].image}
                         alt={activeAds[0].title}
                         className="w-full h-full object-cover"
                     />

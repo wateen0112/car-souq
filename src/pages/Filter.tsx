@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useParams } from 'react-router-dom';
 import { useCars } from '../hooks/useCars';
 import CarCard from '../components/CarCard';
 import { Button } from '../components/ui/Button';
@@ -9,45 +9,50 @@ import { Filter as FilterIcon } from 'lucide-react';
 import PullToRefreshContainer from '../components/PullToRefreshContainer';
 
 const FilterPage: React.FC = () => {
+    const { userId } = useParams();
     const [searchParams] = useSearchParams();
-    const { cars, loading, refetch } = useCars();
+    const { cars, loading, refetch } = useCars(userId);
     const [showFilters, setShowFilters] = useState(false);
-
+    localStorage.setItem('user-id', userId ?? '')
     // Filter states
     const [searchName, setSearchName] = useState('');
     const [category, setCategory] = useState(searchParams.get('category') || '');
     const [minPrice, setMinPrice] = useState('');
     const [maxPrice, setMaxPrice] = useState('');
     const [year, setYear] = useState('');
-    const [type, setType] = useState<'rent' | 'sell' | 'both' | ''>('');
-    const [color, setColor] = useState('');
+    const [type, setType] = useState<'rent' | 'sale' | 'both' | ''>('');
 
     // Apply filters
     const filteredCars = cars.filter(car => {
         // Search by name/title
         if (searchName && !car.title.toLowerCase().includes(searchName.toLowerCase())) return false;
-        if (category && !car.category.includes(category)) return false;
-        if (year && car.year !== parseInt(year)) return false;
-        if (color && !car.color.includes(color)) return false;
 
-        // Type filter
-        if (type && type !== 'both') {
-            if (type === 'rent' && car.renting_type === 'sell') return false;
-            if (type === 'sell' && car.renting_type === 'rent') return false;
+        // Search by category (type or model)
+        if (category) {
+            const catLower = category.toLowerCase();
+            const matchesType = car.type && car.type.toLowerCase().includes(catLower);
+            const matchesModel = car.model && car.model.toLowerCase().includes(catLower);
+            if (!matchesType && !matchesModel) return false;
         }
 
-        // Price filter (check sell price or rent price depending on type, or any if not specified)
-        // This is a bit complex because a car can be both.
-        // If user filters by price, we check if ANY of the prices match.
+        if (year && car.manufacture_year !== parseInt(year)) return false;
+
+        // Type filter: 'sale', 'rent', or 'both'
+        if (type && type !== 'both') {
+            if (type === 'sale' && car.listing_type === 'rent') return false;
+            // If user wants rent, excludes 'sale' only cars
+            if (type === 'rent' && car.listing_type === 'sale') return false;
+        }
+
+        // Price filter
         const prices = [
-            car.sell_price,
-            car.rent_price_daily,
-            car.rent_price_weekly,
-            car.rent_price_monthly,
-            car.rent_price_yearly
+            car.sale_price,
+            car.daily_rent_price,
+            car.weekly_rent_price,
+            car.monthly_rent_price
         ].filter(p => p !== undefined && p !== null) as number[];
 
-        if (prices.length === 0) return true; // No price set, maybe show it?
+        if (prices.length === 0) return true;
 
         const min = minPrice ? parseFloat(minPrice) : 0;
         const max = maxPrice ? parseFloat(maxPrice) : Infinity;
@@ -109,18 +114,11 @@ const FilterPage: React.FC = () => {
                             >
                                 <option value="">الكل</option>
                                 <option value="rent">إيجار</option>
-                                <option value="sell">بيع</option>
+                                <option value="sale">بيع</option>
                             </select>
                         </div>
 
-                        <div>
-                            <label className="text-sm font-medium mb-1.5 block">اللون</label>
-                            <Input
-                                placeholder="أحمر، أبيض..."
-                                value={color}
-                                onChange={e => setColor(e.target.value)}
-                            />
-                        </div>
+                        {/* Color filter removed as it's not in API response */}
 
                         <div className="grid grid-cols-2 gap-2">
                             <div>
@@ -151,7 +149,6 @@ const FilterPage: React.FC = () => {
                                 setCategory('');
                                 setYear('');
                                 setType('');
-                                setColor('');
                                 setMinPrice('');
                                 setMaxPrice('');
                             }}

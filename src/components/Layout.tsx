@@ -4,6 +4,8 @@ import { Home, Filter, User, PlusCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import WhatsAppButton from './WhatsAppButton';
 import { WHATSAPP_CONFIG } from '../lib/whatsappConfig';
+import { useAppSelector } from '../store/hooks';
+import type { RootState } from '../store/store';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -12,10 +14,11 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
     const location = useLocation();
     const isAdmin = localStorage.getItem('admin_session') === 'true';
-
+    const profile = useAppSelector((state: RootState) => (state.auth as any).profile);
+    const userId = localStorage.getItem('user-id')
     const navItems = [
         { icon: Home, label: 'الرئيسية', path: '/' },
-        { icon: Filter, label: 'بحث', path: '/filter' },
+        { icon: Filter, label: 'بحث', path: `/${userId}/filter` },
         // Only show Admin Login if not logged in, or Dashboard if logged in
         isAdmin
             ? { icon: PlusCircle, label: 'لوحة التحكم', path: '/admin/dashboard' }
@@ -27,8 +30,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Top Header for Mobile/Desktop */}
             <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <div className=" z-50 bg-white container flex h-14 items-center justify-between px-4">
-                    <Link to="/" className="flex items-center gap-2 font-bold text-xl text-primary">
-                        <span>سوق السيارات</span>
+                    <Link to={`/${localStorage.getItem('user-id')}`} className="flex items-center gap-2 font-bold text-xl text-primary">
+                        {profile?.logo ? (
+                            <img
+                                src={profile.logo}
+                                alt="Logo"
+                                className="h-10 w-auto object-contain max-w-[150px]"
+                            />
+                        ) : (
+                            <span> </span>
+                        )}
                     </Link>
 
                     {/* Desktop Nav */}
@@ -88,7 +99,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
             {/* WhatsApp Floating Button */}
             <WhatsAppButton
-                phoneNumber={WHATSAPP_CONFIG.phoneNumber}
+                phoneNumber={profile?.phone_number || WHATSAPP_CONFIG.phoneNumber}
                 message={WHATSAPP_CONFIG.defaultMessage}
             />
         </div>

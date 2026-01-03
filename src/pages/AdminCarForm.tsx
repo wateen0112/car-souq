@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { db, storage } from '../lib/firebase';
-import { doc, getDoc, collection, addDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { api } from '../../api';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Skeleton } from '../components/ui/Skeleton';
@@ -45,30 +43,33 @@ const AVAILABLE_FEATURES = [
     'عجلات رياضية'
 ];
 
+interface ImageItem {
+    url: string;
+    file?: File;
+}
+
 const AdminCarForm: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const isEdit = !!id;
 
     const [loading, setLoading] = useState(false);
-    const [uploading, setUploading] = useState(false);
     const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
     const [showFeaturesDropdown, setShowFeaturesDropdown] = useState(false);
 
+    const [images, setImages] = useState<ImageItem[]>([]);
     const [formData, setFormData] = useState({
         title: '',
         description: '',
-        year: new Date().getFullYear(),
-        category: '',
-        color: '',
-        renting_type: 'sell',
-        rent_price_daily: '',
-        rent_price_weekly: '',
-        rent_price_monthly: '',
-        rent_price_yearly: '',
-        sell_price: '',
-        extra_features: [] as string[],
-        images: [] as string[]
+        manufacture_year: new Date().getFullYear(),
+        type: '',
+        model: '',
+        listing_type: 'sale' as 'sale' | 'rent' | 'both',
+        daily_rent_price: '',
+        weekly_rent_price: '',
+        monthly_rent_price: '',
+        sale_price: '',
+        additional_features: [] as string[],
     });
 
     useEffect(() => {
@@ -88,69 +89,61 @@ const AdminCarForm: React.FC = () => {
         if (!id) return;
         setLoading(true);
         try {
-            const carDoc = await getDoc(doc(db, 'cars', id));
-            if (carDoc.exists()) {
-                const data = carDoc.data();
-                setFormData({
-                    ...data,
-                    title: data.title || '',
-                    description: data.description || '',
-                    year: data.year || new Date().getFullYear(),
-                    category: data.category || '',
-                    color: data.color || '',
-                    renting_type: data.renting_type || 'sell',
-                    rent_price_daily: data.rent_price_daily || '',
-                    rent_price_weekly: data.rent_price_weekly || '',
-                    rent_price_monthly: data.rent_price_monthly || '',
-                    rent_price_yearly: data.rent_price_yearly || '',
-                    sell_price: data.sell_price || '',
-                    extra_features: data.extra_features || [],
-                    images: data.images || [],
-                } as any);
+            const response = await api.getCar(id);
+            const data = response.data || response;
+
+            // Handle potentially nested pricing object or flat structure
+            const salePrice = data.pricing?.sale_price ?? data.sale_price;
+            const dailyPrice = data.pricing?.daily_rent_price ?? data.daily_rent_price;
+            const weeklyPrice = data.pricing?.weekly_rent_price ?? data.weekly_rent_price;
+            const monthlyPrice = data.pricing?.monthly_rent_price ?? data.monthly_rent_price;
+
+            setFormData({
+                title: data.title || '',
+                description: data.description || '',
+                manufacture_year: data.manufacture_year || new Date().getFullYear(),
+                type: data.type || '',
+                model: data.model || '',
+                listing_type: data.listing_type || 'sale',
+                sale_price: salePrice ? String(salePrice) : '',
+                daily_rent_price: dailyPrice ? String(dailyPrice) : '',
+                weekly_rent_price: weeklyPrice ? String(weeklyPrice) : '',
+                monthly_rent_price: monthlyPrice ? String(monthlyPrice) : '',
+                additional_features: data.additional_features || [],
+            });
+
+            if (data.images && Array.isArray(data.images)) {
+                setImages(data.images.map((url: string) => ({ url })));
             }
         } catch (err) {
             console.error('Error fetching car:', err);
+            alert('حدث خطأ في تحميل بيانات السيارة');
         }
         setLoading(false);
     };
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files || e.target.files.length === 0) return;
 
-        setUploading(true);
         const files = Array.from(e.target.files);
-        const newImages: string[] = [];
+        const newImages: ImageItem[] = files.map(file => ({
+            url: URL.createObjectURL(file), // Create local preview URL
+            file: file
+        }));
 
-        for (const file of files) {
-            const fileName = `${Date.now()}_${file.name}`;
-            const storageRef = ref(storage, `car-images/${fileName}`);
-
-            try {
-                await uploadBytes(storageRef, file);
-                const publicUrl = await getDownloadURL(storageRef);
-                newImages.push(publicUrl);
-            } catch (error) {
-                console.error('Error uploading image:', error);
-            }
-        }
-
-        setFormData(prev => ({ ...prev, images: [...prev.images, ...newImages] }));
-        setUploading(false);
+        setImages(prev => [...prev, ...newImages]);
     };
 
     const removeImage = (index: number) => {
-        setFormData(prev => ({
-            ...prev,
-            images: prev.images.filter((_, i) => i !== index)
-        }));
+        setImages(prev => prev.filter((_, i) => i !== index));
     };
 
     const toggleFeature = (feature: string) => {
         setFormData(prev => ({
             ...prev,
-            extra_features: prev.extra_features.includes(feature)
-                ? prev.extra_features.filter(f => f !== feature)
-                : [...prev.extra_features, feature]
+            additional_features: prev.additional_features.includes(feature)
+                ? prev.additional_features.filter(f => f !== feature)
+                : [...prev.additional_features, feature]
         }));
     };
 
@@ -158,27 +151,49 @@ const AdminCarForm: React.FC = () => {
         e.preventDefault();
         setLoading(true);
 
-        const payload = {
-            ...formData,
-            rent_price_daily: formData.rent_price_daily ? Number(formData.rent_price_daily) : null,
-            rent_price_weekly: formData.rent_price_weekly ? Number(formData.rent_price_weekly) : null,
-            rent_price_monthly: formData.rent_price_monthly ? Number(formData.rent_price_monthly) : null,
-            rent_price_yearly: formData.rent_price_yearly ? Number(formData.rent_price_yearly) : null,
-            sell_price: formData.sell_price ? Number(formData.sell_price) : null,
-            updated_at: serverTimestamp(),
-            ...(isEdit ? {} : { created_at: serverTimestamp() })
-        };
-
         try {
+            const data = new FormData();
+
+            // Append basic fields
+            data.append('title', formData.title);
+            data.append('description', formData.description);
+            data.append('type', formData.type);
+            data.append('model', formData.model);
+            data.append('manufacture_year', formData.manufacture_year.toString());
+            data.append('listing_type', formData.listing_type);
+
+            if (formData.sale_price) data.append('sale_price', formData.sale_price);
+            if (formData.daily_rent_price) data.append('daily_rent_price', formData.daily_rent_price);
+            if (formData.weekly_rent_price) data.append('weekly_rent_price', formData.weekly_rent_price);
+            if (formData.monthly_rent_price) data.append('monthly_rent_price', formData.monthly_rent_price);
+
+            // Append additional features as array
+            formData.additional_features.forEach((feature) => {
+                data.append('additional_features[]', feature);
+            });
+
+            // Append images
+            // For new files
+            images.forEach((img) => {
+                if (img.file) {
+                    data.append('images[]', img.file);
+                } else {
+                    // For existing images, we send them as 'keep_images'
+                    data.append('keep_images[]', img.url);
+                }
+            });
+
             if (isEdit && id) {
-                await updateDoc(doc(db, 'cars', id), payload as any);
+                // For Laravel PUT requests with FormData, use POST and _method
+                data.append('_method', 'PUT');
+                await api.updateCar(id, data);
             } else {
-                await addDoc(collection(db, 'cars'), payload);
+                await api.createCar(data);
             }
             navigate('/admin/dashboard');
         } catch (error: any) {
             console.error('Error saving car:', error);
-            alert('حدث خطأ: ' + error.message);
+            alert('حدث خطأ: ' + (error.message || 'فشل في حفظ السيارة'));
         } finally {
             setLoading(false);
         }
@@ -234,17 +249,17 @@ const AdminCarForm: React.FC = () => {
                             <Input required value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} />
                         </div>
 
-                        {/* Category Dropdown */}
+                        {/* Type Dropdown */}
                         <div className="space-y-2 relative">
-                            <label className="text-sm font-medium">التصنيف</label>
+                            <label className="text-sm font-medium">النوع</label>
                             <div className="relative">
                                 <button
                                     type="button"
                                     onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
                                     className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                                 >
-                                    <span className={formData.category ? '' : 'text-muted-foreground'}>
-                                        {formData.category || 'اختر التصنيف'}
+                                    <span className={formData.type ? '' : 'text-muted-foreground'}>
+                                        {formData.type || 'اختر النوع'}
                                     </span>
                                     <svg className="h-4 w-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -258,7 +273,7 @@ const AdminCarForm: React.FC = () => {
                                                     key={cat}
                                                     type="button"
                                                     onClick={() => {
-                                                        setFormData({ ...formData, category: cat });
+                                                        setFormData({ ...formData, type: cat });
                                                         setShowCategoryDropdown(false);
                                                     }}
                                                     className="w-full text-right px-3 py-2 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors text-foreground"
@@ -273,12 +288,12 @@ const AdminCarForm: React.FC = () => {
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">السنة</label>
-                            <Input type="number" required value={formData.year} onChange={e => setFormData({ ...formData, year: Number(e.target.value) })} />
+                            <label className="text-sm font-medium">الموديل</label>
+                            <Input required value={formData.model} onChange={e => setFormData({ ...formData, model: e.target.value })} />
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-medium">اللون</label>
-                            <Input required value={formData.color} onChange={e => setFormData({ ...formData, color: e.target.value })} />
+                            <label className="text-sm font-medium">سنة الصنع</label>
+                            <Input type="number" required value={formData.manufacture_year} onChange={e => setFormData({ ...formData, manufacture_year: Number(e.target.value) })} />
                         </div>
                     </div>
 
@@ -299,36 +314,36 @@ const AdminCarForm: React.FC = () => {
                         <label className="text-sm font-medium">نوع العرض</label>
                         <select
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                            value={formData.renting_type}
-                            onChange={(e) => setFormData({ ...formData, renting_type: e.target.value })}
+                            value={formData.listing_type}
+                            onChange={(e) => setFormData({ ...formData, listing_type: e.target.value as 'sale' | 'rent' | 'both' })}
                         >
-                            <option value="sell">بيع فقط</option>
+                            <option value="sale">بيع فقط</option>
                             <option value="rent">إيجار فقط</option>
                             <option value="both">بيع وإيجار</option>
                         </select>
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-4">
-                        {(formData.renting_type === 'sell' || formData.renting_type === 'both') && (
+                        {(formData.listing_type === 'sale' || formData.listing_type === 'both') && (
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">سعر البيع</label>
-                                <Input type="text" value={formData.sell_price} onChange={e => setFormData({ ...formData, sell_price: e.target.value })} />
+                                <Input type="number" value={formData.sale_price} onChange={e => setFormData({ ...formData, sale_price: e.target.value })} />
                             </div>
                         )}
 
-                        {(formData.renting_type === 'rent' || formData.renting_type === 'both') && (
+                        {(formData.listing_type === 'rent' || formData.listing_type === 'both') && (
                             <>
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">إيجار يومي</label>
-                                    <Input type="number" value={formData.rent_price_daily} onChange={e => setFormData({ ...formData, rent_price_daily: e.target.value })} />
+                                    <Input type="number" value={formData.daily_rent_price} onChange={e => setFormData({ ...formData, daily_rent_price: e.target.value })} />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">إيجار أسبوعي</label>
-                                    <Input type="number" value={formData.rent_price_weekly} onChange={e => setFormData({ ...formData, rent_price_weekly: e.target.value })} />
+                                    <Input type="number" value={formData.weekly_rent_price} onChange={e => setFormData({ ...formData, weekly_rent_price: e.target.value })} />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">إيجار شهري</label>
-                                    <Input type="number" value={formData.rent_price_monthly} onChange={e => setFormData({ ...formData, rent_price_monthly: e.target.value })} />
+                                    <Input type="number" value={formData.monthly_rent_price} onChange={e => setFormData({ ...formData, monthly_rent_price: e.target.value })} />
                                 </div>
                             </>
                         )}
@@ -339,9 +354,9 @@ const AdminCarForm: React.FC = () => {
                     <h2 className="font-semibold text-lg">الصور</h2>
 
                     <div className="grid grid-cols-3 gap-4">
-                        {formData.images.map((img, idx) => (
+                        {images.map((img, idx) => (
                             <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border group">
-                                <img src={img} alt="" className="w-full h-full object-cover" />
+                                <img src={img.url} alt="" className="w-full h-full object-cover" />
                                 <button
                                     type="button"
                                     onClick={() => removeImage(idx)}
@@ -352,9 +367,9 @@ const AdminCarForm: React.FC = () => {
                             </div>
                         ))}
                         <label className="flex flex-col items-center justify-center aspect-square rounded-lg border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 cursor-pointer transition-colors bg-muted/50">
-                            {uploading ? <Loader2 className="animate-spin" /> : <Upload className="text-muted-foreground" />}
+                            <Upload className="text-muted-foreground" />
                             <span className="text-xs text-muted-foreground mt-2">رفع صور</span>
-                            <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
+                            <input type="file" multiple accept="image/*" className="hidden" onChange={handleImageUpload} />
                         </label>
                     </div>
                 </div>
@@ -370,8 +385,8 @@ const AdminCarForm: React.FC = () => {
                             className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                         >
                             <span className="text-muted-foreground">
-                                {formData.extra_features.length > 0
-                                    ? `تم اختيار ${formData.extra_features.length} ميزة`
+                                {formData.additional_features.length > 0
+                                    ? `تم اختيار ${formData.additional_features.length} ميزة`
                                     : 'اختر المميزات'}
                             </span>
                             <svg className="h-4 w-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -390,7 +405,7 @@ const AdminCarForm: React.FC = () => {
                                             className="w-full flex items-center justify-between px-3 py-2 text-sm rounded-sm hover:bg-accent hover:text-accent-foreground transition-colors text-foreground"
                                         >
                                             <span>{feature}</span>
-                                            {formData.extra_features.includes(feature) && (
+                                            {formData.additional_features.includes(feature) && (
                                                 <Check size={16} className="text-primary" />
                                             )}
                                         </button>
@@ -401,7 +416,7 @@ const AdminCarForm: React.FC = () => {
                     </div>
 
                     <div className="flex flex-wrap gap-2 mt-4">
-                        {formData.extra_features.map((feature, idx) => (
+                        {formData.additional_features.map((feature, idx) => (
                             <div key={idx} className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm flex items-center gap-2">
                                 {feature}
                                 <button type="button" onClick={() => toggleFeature(feature)} className="hover:text-destructive">
@@ -413,7 +428,7 @@ const AdminCarForm: React.FC = () => {
                 </div>
 
                 <div className="flex gap-4 pt-4">
-                    <Button type="submit" className="flex-1" disabled={loading || uploading}>
+                    <Button type="submit" className="flex-1" disabled={loading}>
                         {loading ? <Loader2 className="animate-spin mr-2" /> : null}
                         {isEdit ? 'حفظ التغييرات' : 'إضافة السيارة'}
                     </Button>
